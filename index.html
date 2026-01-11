@@ -375,7 +375,7 @@
                     gainNode = audioContext.createGain();
                     gainNode.gain.value = micSensitivity; // Use current sensitivity setting
                     source.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
+                    // Don't connect to destination - we only want text, no audio playback
                 }).catch(err => {
                     console.error('Microphone access error:', err);
                 });
