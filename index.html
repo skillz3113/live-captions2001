@@ -175,6 +175,82 @@
         .hidden {
             display: none;
         }
+
+        .log-controls {
+            background-color: #1f2937;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            border-top: 1px solid #374151;
+        }
+
+        .btn-blue {
+            background-color: #2563eb;
+        }
+
+        .btn-blue:active {
+            background-color: #1d4ed8;
+        }
+
+        .timestamp {
+            color: #6b7280;
+            font-size: 14px;
+            margin-top: 8px;
+            margin-bottom: 16px;
+        }
+
+        .sensitivity-control {
+            background-color: #1f2937;
+            padding: 12px 16px;
+            border-top: 1px solid #374151;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .sensitivity-label {
+            color: #9ca3af;
+            font-size: 14px;
+            min-width: 120px;
+        }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 200px;
+            height: 8px;
+            border-radius: 5px;
+            background: #374151;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #059669;
+            cursor: pointer;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #059669;
+            cursor: pointer;
+            border: none;
+        }
+
+        .sensitivity-value {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            min-width: 40px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -200,6 +276,19 @@
                     <button class="btn btn-green" id="micBtn" aria-label="Start listening">🎤</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Log Controls -->
+        <div class="log-controls">
+            <button class="btn btn-blue" id="saveLogBtn">💾 Save Conversation</button>
+            <button class="btn btn-gray" id="copyLogBtn">📋 Copy Text</button>
+        </div>
+
+        <!-- Sensitivity Control -->
+        <div class="sensitivity-control">
+            <span class="sensitivity-label">🎚️ Mic Sensitivity:</span>
+            <input type="range" min="1" max="5" value="2" step="0.5" class="slider" id="sensitivitySlider">
+            <span class="sensitivity-value" id="sensitivityValue">2.0x</span>
         </div>
 
         <!-- Status bar -->
@@ -228,6 +317,11 @@
         let fontSize = 32;
         let transcript = '';
         let recognition = null;
+        let conversationLog = [];
+        let sessionStartTime = null;
+        let micSensitivity = 2.0; // Default 2x gain
+        let audioContext = null;
+        let gainNode = null;
 
         // Elements
         const micBtn = document.getElementById('micBtn');
@@ -239,8 +333,12 @@
         const transcriptContent = document.getElementById('transcriptContent');
         const transcriptContainer = document.getElementById('transcriptContainer');
         const emptyState = document.getElementById('emptyState');
+        const saveLogBtn = document.getElementById('saveLogBtn');
+        const copyLogBtn = document.getElementById('copyLogBtn');
+        const sensitivitySlider = document.getElementById('sensitivitySlider');
+        const sensitivityValue = document.getElementById('sensitivityValue');
 
-        // Initialize speech recognition
+        // Initialize speech recognition with enhanced sensitivity
         function initSpeechRecognition() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             
@@ -253,7 +351,35 @@
             recognition.continuous = true;
             recognition.interimResults = true;
             recognition.lang = 'en-US';
-            recognition.maxAlternatives = 1;
+            recognition.maxAlternatives = 3; // Increased for better accuracy
+
+            // Request enhanced microphone access with higher sensitivity
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: false,      // Disabled to capture more
+                        autoGainControl: true,         // Boost quiet audio
+                        sampleRate: 48000,            // High quality
+                        channelCount: 1,
+                        volume: 1.0                    // Max volume
+                    }
+                }).then(stream => {
+                    window.audioStream = stream;
+                    
+                    // Create audio context for adjustable gain boost
+                    if (!audioContext) {
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    const source = audioContext.createMediaStreamSource(stream);
+                    gainNode = audioContext.createGain();
+                    gainNode.gain.value = micSensitivity; // Use current sensitivity setting
+                    source.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                }).catch(err => {
+                    console.error('Microphone access error:', err);
+                });
+            }
 
             recognition.onresult = function(event) {
                 let interimTranscript = '';
@@ -270,6 +396,12 @@
 
                 if (finalTranscript) {
                     transcript += finalTranscript;
+                    // Log to conversation history with timestamp
+                    const timestamp = new Date().toLocaleTimeString();
+                    conversationLog.push({
+                        time: timestamp,
+                        text: finalTranscript.trim()
+                    });
                 }
 
                 updateTranscriptDisplay(interimTranscript);
@@ -348,6 +480,11 @@
                 return;
             }
 
+            // Set session start time if not already set
+            if (!sessionStartTime) {
+                sessionStartTime = new Date();
+            }
+
             try {
                 recognition.start();
                 isListening = true;
@@ -387,6 +524,92 @@
             emptyState.classList.remove('hidden');
         }
 
+        // Save conversation log as text file
+        function saveConversationLog() {
+            if (conversationLog.length === 0) {
+                alert('No conversation to save yet. Start listening first!');
+                return;
+            }
+
+            const sessionDate = sessionStartTime ? sessionStartTime.toLocaleDateString() : new Date().toLocaleDateString();
+            const sessionTime = sessionStartTime ? sessionStartTime.toLocaleTimeString() : new Date().toLocaleTimeString();
+            
+            let logText = `Live Captions - Conversation Log\n`;
+            logText += `Date: ${sessionDate}\n`;
+            logText += `Session Started: ${sessionTime}\n`;
+            logText += `\n${'='.repeat(50)}\n\n`;
+            
+            conversationLog.forEach((entry, index) => {
+                logText += `[${entry.time}] ${entry.text}\n\n`;
+            });
+            
+            logText += `\n${'='.repeat(50)}\n`;
+            logText += `Total entries: ${conversationLog.length}\n`;
+            logText += `Session ended: ${new Date().toLocaleTimeString()}\n`;
+
+            // Create download
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `conversation-log-${sessionDate.replace(/\//g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // Show confirmation
+            const originalText = saveLogBtn.textContent;
+            saveLogBtn.textContent = '✅ Saved!';
+            setTimeout(() => {
+                saveLogBtn.textContent = originalText;
+            }, 2000);
+        }
+
+        // Copy conversation to clipboard
+        function copyConversationLog() {
+            if (conversationLog.length === 0) {
+                alert('No conversation to copy yet. Start listening first!');
+                return;
+            }
+
+            let logText = '';
+            conversationLog.forEach((entry) => {
+                logText += `[${entry.time}] ${entry.text}\n`;
+            });
+
+            // Copy to clipboard
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(logText).then(() => {
+                    const originalText = copyLogBtn.textContent;
+                    copyLogBtn.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        copyLogBtn.textContent = originalText;
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Copy failed:', err);
+                    alert('Failed to copy. Please try again.');
+                });
+            } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = logText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    const originalText = copyLogBtn.textContent;
+                    copyLogBtn.textContent = '✅ Copied!';
+                    setTimeout(() => {
+                        copyLogBtn.textContent = originalText;
+                    }, 2000);
+                } catch (err) {
+                    alert('Failed to copy. Please try again.');
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+
         // Increase font size
         function increaseFontSize() {
             if (fontSize < 72) {
@@ -405,11 +628,25 @@
             }
         }
 
+        // Update mic sensitivity
+        function updateSensitivity() {
+            micSensitivity = parseFloat(sensitivitySlider.value);
+            sensitivityValue.textContent = micSensitivity.toFixed(1) + 'x';
+            
+            // Update gain node if it exists
+            if (gainNode) {
+                gainNode.gain.value = micSensitivity;
+            }
+        }
+
         // Event listeners
         micBtn.addEventListener('click', toggleListening);
         clearBtn.addEventListener('click', clearTranscript);
         increaseFontBtn.addEventListener('click', increaseFontSize);
         decreaseFontBtn.addEventListener('click', decreaseFontSize);
+        saveLogBtn.addEventListener('click', saveConversationLog);
+        copyLogBtn.addEventListener('click', copyConversationLog);
+        sensitivitySlider.addEventListener('input', updateSensitivity);
 
         // Initialize on load
         window.addEventListener('load', function() {
