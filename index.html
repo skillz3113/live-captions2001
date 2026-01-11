@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Live Captions">
+    <title>Live Captions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #111827;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background-color: #1f2937;
+            padding: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .font-controls {
+            display: flex;
+            background-color: #374151;
+            border-radius: 8px;
+            padding: 4px;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: white;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 48px;
+            min-height: 48px;
+        }
+
+        .btn-small {
+            padding: 8px;
+            min-width: 36px;
+            min-height: 36px;
+        }
+
+        .btn-gray {
+            background-color: #374151;
+        }
+
+        .btn-gray:active {
+            background-color: #4b5563;
+        }
+
+        .btn-green {
+            background-color: #059669;
+        }
+
+        .btn-green:active {
+            background-color: #047857;
+        }
+
+        .btn-red {
+            background-color: #dc2626;
+        }
+
+        .btn-red:active {
+            background-color: #b91c1c;
+        }
+
+        .font-size-display {
+            padding: 0 8px;
+            font-size: 14px;
+            color: white;
+        }
+
+        .status-bar {
+            padding: 12px 16px;
+            margin: 16px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .status-listening {
+            background-color: #065f46;
+            border: 1px solid #059669;
+        }
+
+        .status-error {
+            background-color: #7f1d1d;
+            border: 1px solid #dc2626;
+        }
+
+        .transcript-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .transcript-content {
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .interim-text {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #6b7280;
+            margin-top: 80px;
+        }
+
+        .mic-icon-large {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            opacity: 0.5;
+        }
+
+        .footer {
+            background-color: #1f2937;
+            padding: 16px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <h1 class="title">Live Captions</h1>
+                <div class="controls">
+                    <!-- Font size controls -->
+                    <div class="font-controls">
+                        <button class="btn btn-small btn-gray" id="decreaseFont" aria-label="Decrease font size">
+                            <span style="font-size: 12px;">A</span>
+                        </button>
+                        <span class="font-size-display" id="fontSizeDisplay">32px</span>
+                        <button class="btn btn-small btn-gray" id="increaseFont" aria-label="Increase font size">
+                            <span style="font-size: 20px;">A</span>
+                        </button>
+                    </div>
+                    <!-- Clear button -->
+                    <button class="btn btn-gray" id="clearBtn" aria-label="Clear transcript">🗑️</button>
+                    <!-- Mic button -->
+                    <button class="btn btn-green" id="micBtn" aria-label="Start listening">🎤</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status bar -->
+        <div id="statusBar" class="hidden"></div>
+
+        <!-- Transcript display -->
+        <div class="transcript-container" id="transcriptContainer">
+            <div class="transcript-content" id="transcriptContent">
+                <div class="empty-state" id="emptyState">
+                    <div class="mic-icon-large">🎤</div>
+                    <p style="font-size: 24px; margin-bottom: 16px;">Press the microphone button to start</p>
+                    <p style="font-size: 18px;">Speech will appear here in real-time</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Tap the microphone to start/stop • Use text size buttons to adjust readability</p>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let isListening = false;
+        let fontSize = 32;
+        let transcript = '';
+        let recognition = null;
+
+        // Elements
+        const micBtn = document.getElementById('micBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const increaseFontBtn = document.getElementById('increaseFont');
+        const decreaseFontBtn = document.getElementById('decreaseFont');
+        const fontSizeDisplay = document.getElementById('fontSizeDisplay');
+        const statusBar = document.getElementById('statusBar');
+        const transcriptContent = document.getElementById('transcriptContent');
+        const transcriptContainer = document.getElementById('transcriptContainer');
+        const emptyState = document.getElementById('emptyState');
+
+        // Initialize speech recognition
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            
+            if (!SpeechRecognition) {
+                showError('Speech recognition is not supported. Please use Safari on iOS.');
+                return false;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+
+            recognition.onresult = function(event) {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcriptPiece = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcriptPiece + ' ';
+                    } else {
+                        interimTranscript += transcriptPiece;
+                    }
+                }
+
+                if (finalTranscript) {
+                    transcript += finalTranscript;
+                }
+
+                updateTranscriptDisplay(interimTranscript);
+            };
+
+            recognition.onerror = function(event) {
+                console.error('Speech recognition error:', event.error);
+                
+                if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+                    showError('Microphone access denied. Please enable microphone in Settings → Safari.');
+                    stopListening();
+                } else if (event.error === 'no-speech') {
+                    // Ignore no-speech errors
+                    return;
+                } else if (event.error === 'network') {
+                    showError('Network error. Please check your internet connection.');
+                    stopListening();
+                } else {
+                    showError('Error: ' + event.error);
+                    stopListening();
+                }
+            };
+
+            recognition.onend = function() {
+                if (isListening) {
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.log('Restart failed:', e);
+                        stopListening();
+                    }
+                }
+            };
+
+            return true;
+        }
+
+        // Update transcript display
+        function updateTranscriptDisplay(interimText) {
+            emptyState.classList.add('hidden');
+            
+            let html = transcript;
+            if (interimText) {
+                html += '<span class="interim-text">' + interimText + '</span>';
+            }
+            
+            transcriptContent.innerHTML = html;
+            transcriptContent.style.fontSize = fontSize + 'px';
+            
+            // Auto-scroll to bottom
+            transcriptContainer.scrollTop = transcriptContainer.scrollHeight;
+        }
+
+        // Show error message
+        function showError(message) {
+            statusBar.className = 'status-bar status-error';
+            statusBar.textContent = message;
+            statusBar.classList.remove('hidden');
+        }
+
+        // Show listening status
+        function showListening() {
+            statusBar.className = 'status-bar status-listening';
+            statusBar.textContent = '🎤 Listening...';
+            statusBar.classList.remove('hidden');
+        }
+
+        // Hide status
+        function hideStatus() {
+            statusBar.classList.add('hidden');
+        }
+
+        // Start listening
+        function startListening() {
+            if (!recognition && !initSpeechRecognition()) {
+                return;
+            }
+
+            try {
+                recognition.start();
+                isListening = true;
+                micBtn.className = 'btn btn-red';
+                micBtn.textContent = '🔴';
+                showListening();
+            } catch (e) {
+                console.error('Failed to start:', e);
+                showError('Failed to start listening. Please try again.');
+            }
+        }
+
+        // Stop listening
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+            }
+            isListening = false;
+            micBtn.className = 'btn btn-green';
+            micBtn.textContent = '🎤';
+            hideStatus();
+        }
+
+        // Toggle listening
+        function toggleListening() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        // Clear transcript
+        function clearTranscript() {
+            transcript = '';
+            transcriptContent.innerHTML = '';
+            emptyState.classList.remove('hidden');
+        }
+
+        // Increase font size
+        function increaseFontSize() {
+            if (fontSize < 72) {
+                fontSize += 4;
+                fontSizeDisplay.textContent = fontSize + 'px';
+                updateTranscriptDisplay('');
+            }
+        }
+
+        // Decrease font size
+        function decreaseFontSize() {
+            if (fontSize > 20) {
+                fontSize -= 4;
+                fontSizeDisplay.textContent = fontSize + 'px';
+                updateTranscriptDisplay('');
+            }
+        }
+
+        // Event listeners
+        micBtn.addEventListener('click', toggleListening);
+        clearBtn.addEventListener('click', clearTranscript);
+        increaseFontBtn.addEventListener('click', increaseFontSize);
+        decreaseFontBtn.addEventListener('click', decreaseFontSize);
+
+        // Initialize on load
+        window.addEventListener('load', function() {
+            console.log('App loaded successfully');
+            initSpeechRecognition();
+        });
+    </script>
+</body>
+</html>
